@@ -175,9 +175,14 @@ struct Question: Codable {
 struct QuestionListView: View {
     let topic: QuizTopic
     @State private var currentQuestionIndex = 0
-    @State private var userAnswers: [String?] = []
+    @State private var userAnswers: [String?]
     @State private var isAnswerViewPresented = false
     @State private var userScore = 0
+
+    init(topic: QuizTopic) {
+        self.topic = topic
+        _userAnswers = State(initialValue: Array(repeating: nil, count: topic.questions.count))
+    }
 
     var totalQuestions: Int {
         topic.questions.count
@@ -196,6 +201,15 @@ struct QuestionListView: View {
                         currentQuestionIndex += 1
                     })
                     .transition(.scale)
+                    .gesture(
+                        DragGesture()
+                            .onEnded { value in
+                                if value.translation.width > 50 {
+                                    isAnswerViewPresented = false
+                                    currentQuestionIndex += 1
+                                }
+                            }
+                    )
                 } else {
                     VStack(spacing: 20) {
                         ProgressView(value: Double(currentQuestionIndex), total: Double(totalQuestions))
@@ -209,25 +223,48 @@ struct QuestionListView: View {
                             
                             ForEach(0..<currentQuestion.answers.count, id: \.self) { index in
                                 Button(action: {
-                                    let userAnswer = currentQuestion.answers[index]
-                                    userAnswers.append(userAnswer)
-                                    if userAnswer == currentQuestion.answers[Int(currentQuestion.answer)! - 1] {
-                                        userScore += 1
-                                    }
-                                    isAnswerViewPresented = true
+                                    userAnswers[currentQuestionIndex] = currentQuestion.answers[index]
                                 }) {
                                     Text(currentQuestion.answers[index])
                                         .padding()
                                         .frame(maxWidth: .infinity)
-                                        .background(Color.blue)
+                                        .background(userAnswers[currentQuestionIndex] == currentQuestion.answers[index] ? Color.blue : Color.gray)
                                         .foregroundColor(.white)
                                         .cornerRadius(10)
                                         .shadow(color: Color.gray.opacity(0.4), radius: 4, x: 0, y: 2)
                                 }
                             }
+                            
+                            Button(action: {
+                                if let userAnswer = userAnswers[currentQuestionIndex],
+                                   userAnswer == currentQuestion.answers[Int(currentQuestion.answer)! - 1] {
+                                    userScore += 1
+                                }
+                                isAnswerViewPresented = true
+                            }) {
+                                Text("Submit")
+                                    .padding()
+                                    .frame(maxWidth: .infinity)
+                                    .background(Color.blue)
+                                    .foregroundColor(.white)
+                                    .cornerRadius(10)
+                                    .shadow(color: Color.gray.opacity(0.4), radius: 4, x: 0, y: 2)
+                            }
                         }
                         .padding()
                         .transition(.scale)
+                        .gesture(
+                            DragGesture()
+                                .onEnded { value in
+                                    if value.translation.width > 50 {
+                                        if let userAnswer = userAnswers[currentQuestionIndex],
+                                           userAnswer == currentQuestion.answers[Int(currentQuestion.answer)! - 1] {
+                                            userScore += 1
+                                        }
+                                        isAnswerViewPresented = true
+                                    }
+                                }
+                        )
                     }
                 }
             } else {
@@ -237,7 +274,6 @@ struct QuestionListView: View {
         }
     }
 }
-
 
 
 
@@ -297,10 +333,9 @@ struct QuestionView: View {
             Spacer()
             
             Button(action: {
-                // Perform action when Next button is tapped
                 didSelectAnswerIndex(selectedAnswerIndex ?? 0)
             }) {
-                Text("Next")
+                Text("Submit")
                     .foregroundColor(.white)
                     .font(.headline)
                     .padding()
@@ -316,6 +351,14 @@ struct QuestionView: View {
         .cornerRadius(20)
         .shadow(color: Color.gray.opacity(0.4), radius: 8, x: 0, y: 4)
         .padding(20)
+        .gesture(
+            DragGesture()
+                .onEnded { value in
+                    if value.translation.width > 50 { // Check if the swipe is to the right
+                        didSelectAnswerIndex(selectedAnswerIndex ?? 0)
+                    }
+                }
+        )
     }
 }
 
@@ -397,10 +440,6 @@ struct AnswerView: View {
     let userAnswer: String?
     let dismissAction: () -> Void
 
-    var isAnswerCorrect: Bool {
-        userAnswer == correctAnswer
-    }
-
     var body: some View {
         VStack(spacing: 20) {
             Text("Answer:")
@@ -419,20 +458,13 @@ struct AnswerView: View {
                 Text("Your Answer: \(userAnswer)")
                     .padding(.bottom, 20)
                     .font(.headline)
-                    .foregroundColor(isAnswerCorrect ? .green : .red)
+                    .foregroundColor(userAnswer == correctAnswer ? .green : .red)
             }
 
             Text("Correct Answer: \(correctAnswer)")
                 .padding(.bottom, 20)
                 .font(.headline)
                 .foregroundColor(.green)
-
-            if isAnswerCorrect {
-                Text("+1")
-                    .font(.title)
-                    .fontWeight(.bold)
-                    .foregroundColor(.green)
-            }
 
             Button(action: {
                 dismissAction()
@@ -446,12 +478,21 @@ struct AnswerView: View {
                     .cornerRadius(10)
             }
             .padding(.horizontal, 40)
+            .padding(.top, 20) // Add some space above the button
         }
         .padding()
         .background(Color.white)
         .cornerRadius(20)
         .shadow(color: Color.gray.opacity(0.4), radius: 8, x: 0, y: 4)
         .padding(20)
+        .gesture(
+            DragGesture()
+                .onEnded { value in
+                    if value.translation.width > 50 {
+                        dismissAction()
+                    }
+                }
+        )
     }
 }
 
